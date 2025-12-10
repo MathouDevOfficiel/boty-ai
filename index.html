@@ -1,0 +1,422 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <title>Boty AI - Web</title>
+  <style>
+    body {
+      margin: 0;
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background: #0f172a;
+      color: #e5e7eb;
+      display: flex;
+      flex-direction: column;
+      height: 100vh;
+    }
+    .app-container {
+      display: flex;
+      flex-direction: column;
+      height: 100%;
+      max-width: 1000px;
+      margin: 0 auto;
+    }
+    .chat-area {
+      flex: 1;
+      background: #020617;
+      padding: 10px;
+      overflow-y: auto;
+      box-sizing: border-box;
+    }
+    .row {
+      display: flex;
+      margin: 6px 0;
+    }
+    .row.user {
+      justify-content: flex-end;
+    }
+    .row.bot {
+      justify-content: flex-start;
+    }
+    .bubble {
+      max-width: 80%;
+      padding: 8px 10px;
+      border-radius: 12px;
+      box-sizing: border-box;
+      word-wrap: break-word;
+      white-space: pre-wrap;
+    }
+    .user .bubble {
+      background: #22c55e;
+      color: #020617;
+      border-bottom-right-radius: 2px;
+    }
+    .bot .bubble {
+      background: #1f2937;
+      color: #e5e7eb;
+      border-bottom-left-radius: 2px;
+    }
+    .system-msg {
+      text-align: center;
+      font-size: 12px;
+      color: #9ca3af;
+      margin: 8px 0;
+      white-space: pre-wrap;
+    }
+    .input-area {
+      display: flex;
+      gap: 8px;
+      padding: 10px;
+      background: #0f172a;
+      border-top: 1px solid #111827;
+    }
+    .input-area input {
+      flex: 1;
+      padding: 8px 10px;
+      border-radius: 999px;
+      border: none;
+      background: #1e293b;
+      color: #e5e7eb;
+      outline: none;
+    }
+    .input-area button {
+      padding: 8px 18px;
+      border-radius: 999px;
+      border: none;
+      background: #22c55e;
+      color: #020617;
+      font-weight: 600;
+      cursor: pointer;
+    }
+    .input-area button:disabled {
+      opacity: 0.6;
+      cursor: default;
+    }
+
+    /* Code block */
+    .code-block {
+      background: #020617;
+      border: 1px solid #111827;
+      border-radius: 8px;
+      margin-top: 6px;
+      overflow: hidden;
+    }
+    .code-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 11px;
+      color: #9ca3af;
+      padding: 4px 8px;
+      background: #020617;
+    }
+    .code-header button {
+      border: none;
+      padding: 2px 8px;
+      background: #1e293b;
+      color: #e5e7eb;
+      cursor: pointer;
+      border-radius: 999px;
+      font-size: 11px;
+    }
+    .code-body {
+      padding: 6px 8px;
+      font-family: Consolas, "Courier New", monospace;
+      font-size: 12px;
+      white-space: pre-wrap;
+    }
+
+    /* Liens */
+    .link-title {
+      margin-top: 6px;
+      font-size: 12px;
+      color: #9ca3af;
+    }
+    .link-card {
+      display: inline-block;
+      margin-top: 4px;
+      background: #111827;
+      color: #e5e7eb;
+      font-size: 12px;
+      padding: 4px 8px;
+      border-radius: 6px;
+      cursor: pointer;
+      text-decoration: none;
+    }
+    .link-card.youtube {
+      color: #f97373;
+    }
+    .yt-thumb {
+      margin-top: 4px;
+      max-width: 260px;
+      border-radius: 6px;
+      cursor: pointer;
+      display: block;
+    }
+
+    /* Images */
+    .answer-image {
+      display: block;
+      margin-top: 6px;
+      max-width: 260px;
+      border-radius: 8px;
+    }
+
+    @media (max-width: 700px) {
+      .bubble {
+        max-width: 90%;
+      }
+    }
+  </style>
+</head>
+<body>
+<div class="app-container">
+  <div id="chat" class="chat-area"></div>
+
+  <div class="input-area">
+    <input id="userInput" type="text" placeholder="Écris un message..." />
+    <button id="sendBtn" onclick="sendMessage()">Envoyer</button>
+  </div>
+</div>
+
+<script>
+  const chat = document.getElementById("chat");
+  const input = document.getElementById("userInput");
+  const sendBtn = document.getElementById("sendBtn");
+
+  function addSystemMessage(text) {
+    const div = document.createElement("div");
+    div.className = "system-msg";
+    div.textContent = text;
+    chat.appendChild(div);
+    scrollBottom();
+  }
+
+  function createBubbleRow(fromUser) {
+    const row = document.createElement("div");
+    row.className = "row " + (fromUser ? "user" : "bot");
+    const bubble = document.createElement("div");
+    bubble.className = "bubble";
+    row.appendChild(bubble);
+    chat.appendChild(row);
+    return bubble;
+  }
+
+  function addUserMessage(text) {
+    const bubble = createBubbleRow(true);
+    bubble.textContent = text;
+    scrollBottom();
+  }
+
+  function addBotBubble() {
+    return createBubbleRow(false);
+  }
+
+  function scrollBottom() {
+    chat.scrollTop = chat.scrollHeight;
+  }
+
+  function setLoading(loading) {
+    sendBtn.disabled = loading;
+    sendBtn.textContent = loading ? "⏳" : "Envoyer";
+  }
+
+  function escapeHtml(str) {
+    return str
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;");
+  }
+
+  function renderCodeBlock(container, code, lang) {
+    const wrapper = document.createElement("div");
+    wrapper.className = "code-block";
+
+    const header = document.createElement("div");
+    header.className = "code-header";
+    const langSpan = document.createElement("span");
+    langSpan.textContent = lang || "code";
+    header.appendChild(langSpan);
+
+    const copyBtn = document.createElement("button");
+    copyBtn.textContent = "Copier";
+    copyBtn.onclick = () => {
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(code);
+      } else {
+        const ta = document.createElement("textarea");
+        ta.value = code;
+        document.body.appendChild(ta);
+        ta.select();
+        document.execCommand("copy");
+        document.body.removeChild(ta);
+      }
+    };
+    header.appendChild(copyBtn);
+    wrapper.appendChild(header);
+
+    const body = document.createElement("pre");
+    body.className = "code-body";
+    body.textContent = code;
+    wrapper.appendChild(body);
+
+    container.appendChild(wrapper);
+  }
+
+  function renderTextWithCode(container, text) {
+    if (!text.includes("```")) {
+      if (text.trim() !== "") {
+        const p = document.createElement("div");
+        p.style.whiteSpace = "pre-wrap";
+        p.textContent = text.trim();
+        container.appendChild(p);
+      }
+      return;
+    }
+
+    const pattern = /```([\w#+-]+)?\n([\s\S]*?)```/g;
+    let pos = 0;
+    let match;
+    let found = false;
+
+    while ((match = pattern.exec(text)) !== null) {
+      found = true;
+      const pre = text.slice(pos, match.index);
+      if (pre.trim() !== "") {
+        const p = document.createElement("div");
+        p.style.whiteSpace = "pre-wrap";
+        p.textContent = pre.trim();
+        container.appendChild(p);
+      }
+
+      const lang = match[1] || "";
+      const code = (match[2] || "").trim();
+      if (code) {
+        renderCodeBlock(container, code, lang);
+      }
+
+      pos = pattern.lastIndex;
+    }
+
+    if (!found) {
+      const p = document.createElement("div");
+      p.style.whiteSpace = "pre-wrap";
+      p.textContent = text.trim();
+      container.appendChild(p);
+      return;
+    }
+
+    const tail = text.slice(pos);
+    if (tail.trim() !== "") {
+      const p = document.createElement("div");
+      p.style.whiteSpace = "pre-wrap";
+      p.textContent = tail.trim();
+      container.appendChild(p);
+    }
+  }
+
+  function extractYoutubeId(url) {
+    const m = url.match(/(?:v=|youtu\.be\/)([A-Za-z0-9_-]{6,})/);
+    return m ? m[1] : null;
+  }
+
+  function addWebAnswerBubble(data) {
+    const bubble = addBotBubble();
+
+    // texte (avec gestion des blocs de code)
+    const text = data.text || "";
+    renderTextWithCode(bubble, text);
+
+    // image uniquement si requête d'image
+    if (data.is_image_query && data.images && data.images.length > 0) {
+      const img = document.createElement("img");
+      img.src = data.images[0];
+      img.className = "answer-image";
+      img.onerror = () => img.remove();
+      bubble.appendChild(img);
+    }
+
+    // liens uniquement si pas une requête d'image
+    if (!data.is_image_query && data.sources && data.sources.length > 0) {
+      const title = document.createElement("div");
+      title.className = "link-title";
+      title.textContent = "Liens utiles :";
+      bubble.appendChild(title);
+
+      data.sources.slice(0, 5).forEach(src => {
+        const url = src.url;
+        if (!url) return;
+        const link = document.createElement("a");
+        link.className = "link-card";
+        link.href = url;
+        link.target = "_blank";
+        link.rel = "noreferrer";
+        const isYT = url.includes("youtube.com") || url.includes("youtu.be");
+        if (isYT) {
+          link.classList.add("youtube");
+          link.textContent = "▶ " + (src.title || url);
+        } else {
+          link.textContent = "🔗 " + (src.title || url);
+        }
+        bubble.appendChild(link);
+
+        if (isYT) {
+          const vid = extractYoutubeId(url);
+          if (vid) {
+            const thumb = document.createElement("img");
+            thumb.src = "https://img.youtube.com/vi/" + vid + "/hqdefault.jpg";
+            thumb.className = "yt-thumb";
+            thumb.onclick = () => window.open(url, "_blank");
+            bubble.appendChild(thumb);
+          }
+        }
+      });
+    }
+
+    scrollBottom();
+  }
+
+  function sendMessage() {
+    const text = input.value.trim();
+    if (!text) return;
+
+    addUserMessage(text);
+    input.value = "";
+    setLoading(true);
+
+    fetch("/api/chat", {
+      method: "POST",
+      headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({message: text})
+    })
+      .then(res => res.json())
+      .then(data => {
+        setLoading(false);
+        if (data.error) {
+          const bubble = addBotBubble();
+          bubble.textContent = "Erreur: " + data.error;
+          scrollBottom();
+          return;
+        }
+
+        if (data.mode === "local") {
+          const bubble = addBotBubble();
+          renderTextWithCode(bubble, data.text || "");
+          scrollBottom();
+        } else {
+          addWebAnswerBubble(data);
+        }
+      })
+      .catch(err => {
+        setLoading(false);
+        const bubble = addBotBubble();
+        bubble.textContent = "Erreur réseau: " + err;
+        scrollBottom();
+      });
+  }
+
+  addSystemMessage(
+    "Salut, je suis Boty AI 🤖\n"
+  );
+</script>
+</body>
+</html>

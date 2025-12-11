@@ -152,6 +152,7 @@ def chat():
 if __name__ == "__main__":
     # installe Flask avant :  py -3.12 -m pip install flask
     app.run(host="127.0.0.1", port=5000, debug=True)
+
 =======
 # server.py
 from flask import Flask, request, jsonify, send_from_directory
@@ -304,6 +305,5 @@ def chat():
 
 
 if __name__ == "__main__":
-    # installe Flask avant :  py -3.12 -m pip install flask
-    app.run(host="127.0.0.1", port=5000, debug=True)
->>>>>>> f4b7923 (Boty AI)
+    port = int(os.environ.get("PORT", 5000))  # Pour Render / Railway
+    app.run(host="0.0.0.0", port=port)
